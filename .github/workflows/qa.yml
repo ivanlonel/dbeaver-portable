@@ -1,0 +1,42 @@
+name: "✅ QA"
+
+on:
+  push:
+    branches:
+      - main
+
+  pull_request:
+    branches:
+      - main
+
+permissions: {}
+
+jobs:
+  qa:
+    # The tool and its installer are Windows-only (Windows PowerShell 5.1, registry, robocopy).
+    runs-on: windows-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Get source code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          enable-cache: false
+
+      - name: Install the project
+        run: uv sync --locked
+
+      - name: Run prek
+        uses: j178/prek-action@44924fe9ef4a6f88253c4b6b1bf11c689d3ce53d # v3.1.0
+        with:
+          prek-version: "v0.5.10"
+          extra-args: --all-files --verbose
+
+      - name: Run tests
+        run: uv run --locked pytest

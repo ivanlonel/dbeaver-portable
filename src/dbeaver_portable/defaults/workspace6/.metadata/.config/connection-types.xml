@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<types>
+	<type id="dev" name="Desenvolvimento" color="255,255,255" colorDark="255,255,255" description="Banco de dados de desenvolvimento" autocommit="true" confirmExecute="false" confirmDataChange="false" smartCommit="false" smartCommitRecover="true" autoCloseTransactions="true" closeTransactionsPeriod="3600" autoCloseConnections="true" closeConnectionsPeriod="28800"/>
+	<type id="test" name="Teste" color="214,250,207" colorDark="64,89,66" description="Banco de dados de teste (QA)" autocommit="true" confirmExecute="false" confirmDataChange="true" smartCommit="false" smartCommitRecover="true" autoCloseTransactions="true" closeTransactionsPeriod="3600" autoCloseConnections="true" closeConnectionsPeriod="28800"/>
+	<type id="prod" name="Produção" color="250,207,207" colorDark="97,61,63" description="Banco de dados de produção" autocommit="false" confirmExecute="true" confirmDataChange="true" smartCommit="false" smartCommitRecover="false" autoCloseTransactions="true" closeTransactionsPeriod="600" autoCloseConnections="true" closeConnectionsPeriod="3600"/>
+</types>

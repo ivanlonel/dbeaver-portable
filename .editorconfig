@@ -1,0 +1,30 @@
+# https://editorconfig.org/
+
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+indent_style = space
+indent_size = 4
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.py]
+profile = black
+
+[*.{ini,json,json5,jsonc,toml,xml,yaml,yml}]
+indent_size = 2
+
+# Markdown uses two trailing spaces for a line break
+[*.{md,mdown,mdx,markdown}]
+indent_size = 2
+trim_trailing_whitespace = false
+
+[*.{bat,cmd}]
+end_of_line = crlf
+indent_style = tab
+
+# DBeaver writes these with tabs, and the installer test fixtures mirror that.
+[*.{prefs,xml}]
+indent_style = tab

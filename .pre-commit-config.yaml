@@ -1,0 +1,158 @@
+default_install_hook_types:
+  - pre-commit
+  - post-checkout
+  - post-merge
+  - post-rewrite
+
+default_language_version:
+  python: python3.15
+
+repos:
+  - repo: meta
+    hooks:
+      - id: check-hooks-apply
+      - id: check-useless-excludes
+
+  - repo: https://github.com/astral-sh/uv-pre-commit
+    rev: 0.13.6
+    hooks:
+      - id: uv-lock
+        name: uv-lock (frozen)
+      - id: uv-sync
+        always_run: true
+        args:
+          - --locked
+
+  - repo: https://github.com/tsvikas/sync-with-uv
+    rev: v0.6.0
+    hooks:
+      - id: sync-with-uv
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: check-added-large-files
+        args:
+          - --maxkb=500
+      - id: check-ast
+      - id: check-case-conflict
+      - id: check-illegal-windows-names
+      - id: check-json
+      - id: check-merge-conflict
+        args:
+          - --assume-in-merge
+      - id: check-toml
+      - id: check-xml
+      - id: check-yaml
+        additional_dependencies:
+          - ruamel-yaml==0.19.1  # sync-with-uv
+      - id: debug-statements
+      - id: destroyed-symlinks
+      - id: detect-private-key
+      - id: end-of-file-fixer
+      - id: fix-byte-order-marker
+      - id: trailing-whitespace
+        args:
+          - --markdown-linebreak-ext=md
+      - id: name-tests-test
+        args:
+          - --pytest-test-first
+        exclude: (^|/)_[^/]*\.py$ # files starting with an underscore are not test modules
+
+  - repo: https://github.com/pre-commit/pygrep-hooks
+    rev: v1.10.0
+    hooks:
+      - id: python-check-blanket-noqa
+      - id: python-check-blanket-type-ignore
+      - id: python-check-mock-methods
+      - id: python-use-type-annotations
+      - id: text-unicode-replacement-char
+
+  - repo: https://github.com/rhysd/actionlint
+    rev: v1.7.12
+    hooks:
+      - id: actionlint
+        language: golang
+        additional_dependencies:
+          - "github.com/wasilibs/go-shellcheck/cmd/shellcheck@v0.11.1"
+
+  - repo: https://github.com/zizmorcore/zizmor-pre-commit
+    rev: v1.31.1
+    hooks:
+      - id: zizmor
+
+  - repo: https://github.com/executablebooks/mdformat
+    rev: 1.0.0
+    hooks:
+      - id: mdformat
+        language: python
+        additional_dependencies:
+          - mdformat-gfm==1.0.0  # sync-with-uv
+          - mdformat-ruff==0.1.3  # sync-with-uv
+          # The engines behind the formatting, pinned so they too change only with uv.lock.
+          - markdown-it-py==4.2.0  # sync-with-uv
+          - mdit-py-plugins==0.6.1  # sync-with-uv
+          - mdurl==0.1.2  # sync-with-uv
+          - ruff==0.17.4  # sync-with-uv
+          - wcwidth==0.9.4  # sync-with-uv
+
+  - repo: https://github.com/tox-dev/pyproject-fmt
+    rev: v2.30.6
+    hooks:
+      - id: pyproject-fmt
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.17.4
+    hooks:
+      - id: ruff-check
+        args:
+          - --fix
+      - id: ruff-format
+
+  - repo: https://github.com/PyCQA/pylint
+    rev: v4.1.3
+    hooks:
+      - id: pylint
+        # pylint's inference and import-order engines, pinned so they change only with uv.lock.
+        additional_dependencies:
+          - astroid==4.3.4  # sync-with-uv
+          - isort==9.0.2  # sync-with-uv
+          - mccabe==0.7.0  # sync-with-uv
+
+  - repo: local
+    hooks:
+      - id: ty-check
+        name: ty check
+        entry: uv run --exact ty
+        args:
+          - check
+          - --fix
+        language: system
+        pass_filenames: false
+        require_serial: true
+        types_or:
+          - python
+          - pyi
+
+      - id: mypy
+        name: mypy
+        entry: uv run --exact mypy
+        args:
+          - .
+          - --show-traceback
+        language: system
+        pass_filenames: false
+        require_serial: true
+        types_or:
+          - python
+          - pyi
+
+      - id: deptry
+        name: deptry
+        entry: uv run --exact deptry
+        args:
+          - .
+        language: system
+        pass_filenames: false
+        require_serial: true
+        always_run: true
