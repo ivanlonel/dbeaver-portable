@@ -124,7 +124,9 @@ class Sandbox:
                 "-NonInteractive",
             ],
             capture_output=True,
-            text=True,
+            # Windows PowerShell 5.1 writes redirected output in the console code page, which
+            # defaults to the OEM one; UTF-8 fails on the installer's pt-BR messages.
+            encoding="oem",
             check=False,
             timeout=120,
         )
