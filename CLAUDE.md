@@ -23,6 +23,9 @@ hooks run by prek. The README covers usage and the package layout.
   `fix-byte-order-marker` hook strips it); `installer.stage` adds it, and CRLF, at build time.
   Values returned through function output come back PSObject-wrapped, which `JavaScriptSerializer`
   rejects as circular, so store `.psobject.BaseObject` (`Set-Entry`, `ConvertTo-JsonText`).
+  Its redirected output is in the OEM code page, so tests decode it with `encoding="oem"`.
+- Parse XML only through defusedxml. lxml with `resolve_entities=False` keeps entity references
+  as unexpanded nodes, so their text reads back empty instead of failing.
 - Annotation-only imports use PEP 810 `lazy from … import`, not `if TYPE_CHECKING:`.
 - Commit messages follow Conventional Commits (`feat: …`, `fix(installer): …`).
 
