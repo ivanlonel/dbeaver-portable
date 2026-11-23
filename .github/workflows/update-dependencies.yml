@@ -14,59 +14,40 @@ on:
 permissions: {}
 
 jobs:
+  # Runs the hooks, and with them code nobody has vetted: `uv lock --upgrade` ignores
+  # minimumReleaseAge and may build sdists, and the second prek pass installs the hook revs the
+  # first one just bumped. So this job holds no write credential at all (read-only token,
+  # nothing persisted); it only hands its diff to commit-hooks. A token on the same runner
+  # would not be safe in a later step either: a hook can plant .git/hooks or leave a process
+  # behind.
   post-renovate-hooks:
     # Only run on PRs opened by the Renovate GitHub App. Check the PR author from the event
     # payload rather than github.actor, which reflects whoever triggered the latest run
     # (e.g. a re-run or a pushed commit) and is spoofable (zizmor bot-conditions).
-    # Renovate's lock file maintenance is never a trigger: renovate.json disables it, and the
+    # Renovate's lock file maintenance is never a trigger: renovate.json5 disables it, and the
     # weekly group PR refreshes the whole lock in step 0 instead.
-    # This job's commit makes Renovate count the branch as edited and stop rewriting it (see
-    # renovate.json).
     if: github.event.pull_request.user.login == 'renovate[bot]' &&
       (contains(github.event.pull_request.labels.*.name, 'pep621') ||
       contains(github.event.pull_request.labels.*.name, 'pre-commit'))
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
-      contents: write
-      pull-requests: write
+      contents: read
+    outputs:
+      changed: ${{ steps.diff.outputs.changed }}
 
     steps:
-      # Circuit breaker. Failing without committing is what ends a loop: with no hooks commit
-      # on the branch, Renovate's rebuilt commit equals the tip and it stops pushing. The
-      # comment is the notification (a failed run triggered by renovate[bot] emails nobody).
-      - name: Stop if Renovate keeps rebuilding this branch
-        env:
-          GH_TOKEN: ${{ github.token }}
-          PR: ${{ github.event.pull_request.number }}
-        run: |
-          # Legitimate rebuilds follow a push to main or a ticked box: a few an hour at most.
-          # A loop is one every ~2 minutes.
-          since=$(( $(date +%s) - 1800 ))
-          pushes=$(gh api "repos/$GITHUB_REPOSITORY/issues/$PR/timeline" --paginate --jq \
-            ".[] | select(.event == \"head_ref_force_pushed\" and .actor.login == \"renovate[bot]\"
-                   and (.created_at | fromdateiso8601) > $since) | .created_at" | wc -l)
-          if [ "$pushes" -gt 5 ]; then
-            msg="Renovate force-pushed this branch $pushes times in 30 minutes. Not committing the post-Renovate hooks again, to break the loop."
-            gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --body "$msg"
-            echo "::error::$msg"
-            exit 1
-          fi
-
-      # artipacked is ignored on the checkout below: this job intentionally persists the
-      # checkout credentials so git-auto-commit-action (last step) can push the hook results
-      # back to the Renovate PR branch — persist-credentials: false would break that push.
-      - name: Checkout PR branch # zizmor: ignore[artipacked]
+      - name: Checkout PR head
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          # Check out the actual PR branch so we can push changes back to it.
-          ref: ${{ github.head_ref }}
-          token: ${{ secrets.RENOVATE_TOKEN }}
+          # The commit this run is for; commit-hooks refuses to push if the branch moved since.
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
 
       - name: Set up uv
         uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
-          # No cache: this job pushes with a PAT, so it must not restore what a branch wrote.
+          # No cache: what a branch wrote must not reach another branch's hooks.
           enable-cache: false
 
       # ── Step 0: refresh the whole lock, on the weekly group PR only ───
@@ -113,7 +94,89 @@ jobs:
           prek-version: "v0.5.10"
           extra-args: --all-files --verbose --hook-stage manual pyproject-fmt
 
-      # ── Step 2: Commit any hook-generated changes back to the PR branch ───
+      # ── Step 2: hand the result to commit-hooks ───
+      - name: Save the hook results
+        id: diff
+        run: |
+          git diff --binary > "$RUNNER_TEMP/hooks.patch"
+          git diff --stat
+          if [ -s "$RUNNER_TEMP/hooks.patch" ]; then echo "changed=true" >> "$GITHUB_OUTPUT"; fi
+
+      - name: Upload the hook results
+        if: steps.diff.outputs.changed == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: hooks-patch
+          path: ${{ runner.temp }}/hooks.patch
+          if-no-files-found: error
+          retention-days: 1
+
+  # Pushes post-renovate-hooks' diff with RENOVATE_TOKEN (a push with this job's own token
+  # would not start QA). It runs no code from the branch: checkout, git apply, commit, push.
+  # Its commit makes Renovate count the branch as edited and stop rewriting it (see
+  # renovate.json5).
+  commit-hooks:
+    needs: post-renovate-hooks
+    if: needs.post-renovate-hooks.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pull-requests: write
+
+    steps:
+      # Circuit breaker. Failing without committing is what ends a loop: with no hooks commit
+      # on the branch, Renovate's rebuilt commit equals the tip and it stops pushing. The
+      # comment is the notification (a failed run triggered by renovate[bot] emails nobody).
+      - name: Stop if Renovate keeps rebuilding this branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          # Legitimate rebuilds follow a push to main or a ticked box: a few an hour at most.
+          # A loop is one every ~2 minutes.
+          since=$(( $(date +%s) - 1800 ))
+          pushes=$(gh api "repos/$GITHUB_REPOSITORY/issues/$PR/timeline" --paginate --jq \
+            ".[] | select(.event == \"head_ref_force_pushed\" and .actor.login == \"renovate[bot]\"
+                   and (.created_at | fromdateiso8601) > $since) | .created_at" | wc -l)
+          if [ "$pushes" -gt 5 ]; then
+            msg="Renovate force-pushed this branch $pushes times in 30 minutes. Not committing the post-Renovate hooks again, to break the loop."
+            gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --body "$msg"
+            echo "::error::$msg"
+            exit 1
+          fi
+
+      # artipacked is ignored on the checkout below: this job intentionally persists the
+      # checkout credentials so git-auto-commit-action (last step) can push the hook results
+      # back to the Renovate PR branch. Nothing from the branch runs in this job to read them.
+      - name: Checkout PR branch # zizmor: ignore[artipacked]
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.head_ref }}
+          token: ${{ secrets.RENOVATE_TOKEN }}
+
+      - name: Stop if the branch moved since the hooks ran
+        env:
+          HOOKED: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if [ "$(git rev-parse HEAD)" != "$HOOKED" ]; then
+            echo "::error::The branch moved past $HOOKED; the run for its new head applies the hooks."
+            exit 1
+          fi
+
+      - name: Download the hook results
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: hooks-patch
+          path: ${{ runner.temp }}/hooks
+
+      # Only the files the hooks are meant to touch: git apply skips every other path once an
+      # --include is given.
+      - name: Apply the hook results
+        run: |
+          git apply --include=.pre-commit-config.yaml --include=pyproject.toml --include=uv.lock \
+            "$RUNNER_TEMP/hooks/hooks.patch"
+          git diff --stat
+
       - name: Commit changes
         uses: stefanzweifel/git-auto-commit-action@d0b01107b5db882071f96de5dd4b54961ea93f4c # v7.2.1
         with:
@@ -121,15 +184,15 @@ jobs:
           # Pin the author. The default is github.actor, which is renovate[bot] on the runs its
           # pushes trigger, and this commit must never carry Renovate's own identity: a foreign
           # author is what makes Renovate count the branch as edited and stop rewriting it
-          # (see renovate.json).
+          # (see renovate.json5).
           commit_author: github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>
 
-  # A branch the job above committed to is "edited", so Renovate no longer rebases it on
+  # A branch commit-hooks committed to is "edited", so Renovate no longer rebases it on
   # conflict by itself. A PR only becomes conflicted when main moves, so check then and hand
   # each conflicted one back with Renovate's rebaseLabel: it removes the label and rebuilds
-  # the branch once from main, the job above re-adds its commit, and the branch is "edited"
-  # again. One rebuild per conflict, so this cannot feed itself, and a label set with
-  # GITHUB_TOKEN triggers no workflow.
+  # the branch once from main, post-renovate-hooks and commit-hooks re-add their commit, and
+  # the branch is "edited" again. One rebuild per conflict, so this cannot feed itself, and a
+  # label set with GITHUB_TOKEN triggers no workflow.
   rebase-conflicted:
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
