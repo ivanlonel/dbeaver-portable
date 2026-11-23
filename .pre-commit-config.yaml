@@ -114,19 +114,19 @@ repos:
           - mdformat-gfm==1.0.0  # sync-with-uv
           - mdformat-ruff==0.1.3  # sync-with-uv
           # The engines behind the formatting, pinned so they too change only with uv.lock.
-          - markdown-it-py==4.2.0  # sync-with-uv
-          - mdit-py-plugins==0.6.1  # sync-with-uv
+          - markdown-it-py==4.3.0  # sync-with-uv
+          - mdit-py-plugins==0.7.0  # sync-with-uv
           - mdurl==0.1.2  # sync-with-uv
-          - ruff==0.17.4  # sync-with-uv
-          - wcwidth==0.9.4  # sync-with-uv
+          - ruff==0.17.6  # sync-with-uv
+          - wcwidth==0.9.5  # sync-with-uv
 
   - repo: https://github.com/tox-dev/pyproject-fmt
-    rev: v2.30.6
+    rev: v2.31.2
     hooks:
       - id: pyproject-fmt
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.17.4
+    rev: v0.17.6
     hooks:
       - id: ruff-check
         args:
@@ -134,7 +134,7 @@ repos:
       - id: ruff-format
 
   - repo: https://github.com/PyCQA/pylint
-    rev: v4.1.3
+    rev: v4.1.4
     hooks:
       - id: pylint
         # pylint's inference and import-order engines, pinned so they change only with uv.lock.

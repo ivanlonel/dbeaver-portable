@@ -70,28 +70,28 @@ jobs:
       - name: prek – sync-with-uv (first pass)
         uses: j178/prek-action@7b101f8338a08d2bd6fdb3625e4e7692428763a3 # v3.1.1
         with:
-          prek-version: "v0.5.10"
+          prek-version: "v0.5.11"
           extra-args: --all-files --verbose --hook-stage manual sync-with-uv
         continue-on-error: true
 
       - name: prek – sync-with-uv (verify)
         uses: j178/prek-action@7b101f8338a08d2bd6fdb3625e4e7692428763a3 # v3.1.1
         with:
-          prek-version: "v0.5.10"
+          prek-version: "v0.5.11"
           extra-args: --all-files --verbose --hook-stage manual sync-with-uv
 
       # Make sure Renovate didn't upset pyproject-fmt by, e.g., misaligning comments.
       - name: prek – pyproject-fmt (first pass)
         uses: j178/prek-action@7b101f8338a08d2bd6fdb3625e4e7692428763a3 # v3.1.1
         with:
-          prek-version: "v0.5.10"
+          prek-version: "v0.5.11"
           extra-args: --all-files --verbose --hook-stage manual pyproject-fmt
         continue-on-error: true
 
       - name: prek – pyproject-fmt (verify)
         uses: j178/prek-action@7b101f8338a08d2bd6fdb3625e4e7692428763a3 # v3.1.1
         with:
-          prek-version: "v0.5.10"
+          prek-version: "v0.5.11"
           extra-args: --all-files --verbose --hook-stage manual pyproject-fmt
 
       # ── Step 2: hand the result to commit-hooks ───
