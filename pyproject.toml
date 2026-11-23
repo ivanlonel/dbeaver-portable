@@ -199,3 +199,7 @@ report.exclude_also = [
 ]
 report.show_missing = true
 report.ignore_errors = true
+
+# Not the pre-commit-hooks package in uv.lock, whose name sync-with-uv would infer from the repo's.
+[tool.sync-with-uv]
+repo-to-package."https://github.com/renovatebot/pre-commit-hooks" = ""

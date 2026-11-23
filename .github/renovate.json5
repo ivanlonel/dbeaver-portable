@@ -1,0 +1,184 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    ":configMigration",
+    "helpers:pinGitHubActionDigests"
+  ],
+  "timezone": "America/Sao_Paulo",
+  "schedule": [
+    // Before 8am every Monday.
+    "* 0-7 * * 1"
+  ],
+  "minimumReleaseAge": "1 day",
+  // Skip releases that drop the oldest Python requires-python accepts. A bare version, not the
+  // ">=3.15" range Renovate extracts from pyproject.toml: pep440 versioning has no subset(), so
+  // strict filtering falls back to matches(), which needs a bare version and would drop nearly
+  // every release against a range. Keep it at pyproject.toml's requires-python floor.
+  "constraints": {
+    "python": "3.15"
+  },
+  "constraintsFiltering": "strict",
+  "prHourlyLimit": 5,
+  // Automatically merge updates if CI build status is passing.
+  "automerge": true,
+  "automergeStrategy": "squash",
+  // The pep621 and pre-commit managers are not enabled by default.
+  // github-actions is enabled by default and listed here for explicitness.
+  "enabledManagers": [
+    "github-actions",
+    "pep621",
+    "pre-commit"
+  ],
+  // pre-commit support is currently in beta and requires explicit opt-in.
+  "pre-commit": {
+    "enabled": true
+  },
+  // main's ruleset doesn't require branches to be up to date: with it, GitHub's native
+  // auto-merge never refreshes a stale branch, so each merge stalled every sibling PR until the
+  // next Renovate run rebased it (and human PRs forever). Rebasing a PR that's merely behind
+  // would now only re-run QA, and main's own push QA covers the combination. Not the "auto"
+  // default: that resolves to behind-base-branch here through automerge=true.
+  "rebaseWhen": "conflicted",
+  // The Post-Renovate Hooks workflow (.github/workflows/update-dependencies.yml) commits the
+  // sync-with-uv / pyproject-fmt results onto pep621 + pre-commit branches as
+  // github-actions[bot] (author and committer). Renovate counts a branch carrying a foreign
+  // commit author OR committer as edited and leaves it alone: processBranch returns
+  // "pr-edited" before any reuse or commit logic. That is the whole loop protection, so NEVER
+  // list that author in gitIgnoredAuthors (GitHub's only platform-ignored author is
+  // noreply@github.com). With it ignored, Renovate rebuilds the branch from main whenever it
+  // judges it stale, dropping the hooks commit; the workflow re-adds it, and that push starts
+  // the next Renovate run, hundreds of force-pushes per PR. A conflicted PR is handed back
+  // through the "rebase" label (the workflow's rebase-conflicted job), which rebuilds it
+  // exactly once. Since edited branches are never merged by Renovate itself, those PRs
+  // automerge only through GitHub's native auto-merge (allow_auto_merge plus main's ruleset).
+  // Every such PR is "edited" by design, so the warning comment about it would be noise.
+  "suppressNotifications": ["prEditedNotification"],
+  // Raise PRs for known vulnerabilities from the osv.dev database, independent of the schedule.
+  "osvVulnerabilityAlerts": true,
+  // Security PRs default to rangeStrategy "update-lockfile" (a uv.lock-only change), which is
+  // forced over the pep621 rule below. Bump the range instead, as on every other pep621 PR,
+  // so pyproject.toml records the fixed version as the floor.
+  "vulnerabilityAlerts": {
+    "rangeStrategy": "bump"
+  },
+  // The weekly `uv lock --upgrade`, which keeps transitive dependencies that no other
+  // Renovate PR touches current, runs in the Post-Renovate Hooks workflow on the weekly
+  // "pep621 and pre-commit" PR instead. There sync-with-uv re-pins the hooks to the refreshed
+  // lock in the same commit. Renovate's own maintenance PR would conflict with that group PR
+  // on uv.lock, and its hook pins would lag the lock.
+  "lockFileMaintenance": {
+    "enabled": false
+  },
+  "packageRules": [
+    {
+      "matchDepNames": [
+        // Don't suggest upgrades for the project's required Python version.
+        "python"
+      ],
+      "enabled": false
+    },
+    {
+      // Don't suggest upgrades for the pre-commit repos themselves. That's done
+      // by sync-with-uv in the workflow, which mirrors each repo's rev from the
+      // tool pinned in uv.lock, so a Renovate PR would only fight it. The next rule
+      // carves out the repos whose tool ISN'T in uv.lock, which sync-with-uv can't
+      // keep current.
+      "matchManagers": [
+        "pre-commit"
+      ],
+      "matchDepTypes": [
+        "repository"
+      ],
+      "enabled": false
+    },
+    {
+      // Same for the Python additional_dependencies: every one carries a
+      // `# sync-with-uv` pragma, so sync-with-uv pins it to its exact uv.lock
+      // version (pep621 bumps it in pyproject.toml's hook/dev groups). That keeps each
+      // hook environment from re-resolving to newer releases on a cache miss, so a
+      // checker only changes on the PR that changes uv.lock, where it then runs on
+      // every file. Go dependencies (actionlint's shellcheck) stay Renovate's.
+      "matchManagers": [
+        "pre-commit"
+      ],
+      "matchDepTypes": [
+        "pre-commit-python"
+      ],
+      "enabled": false
+    },
+    {
+      // Re-enable the pre-commit repos with no uv.lock-pinned tool for sync-with-uv
+      // to track (no PyPI distribution / non-Python tools), so Renovate owns their
+      // rev bumps. Keep this list aligned with .pre-commit-config.yaml.
+      "matchManagers": [
+        "pre-commit"
+      ],
+      "matchDepTypes": [
+        "repository"
+      ],
+      "matchDepNames": [
+        "gitleaks/gitleaks",
+        "pre-commit/pygrep-hooks",
+        "renovatebot/pre-commit-hooks",
+        "rhysd/actionlint"
+      ],
+      "enabled": true
+    },
+    {
+      "matchManagers": [
+        "pre-commit"
+      ],
+      "addLabels": [
+        "pre-commit"
+      ]
+    },
+    {
+      "matchManagers": [
+        "pep621"
+      ],
+      "addLabels": [
+        "pep621"
+      ]
+    },
+    {
+      // One PR for the week's action bumps instead of one per action. Majors still get a
+      // separate "(major)" group PR: separateMajorMinor outranks packageRule groups.
+      "matchManagers": [
+        "github-actions"
+      ],
+      "addLabels": [
+        "github-actions"
+      ],
+      "groupName": "github-actions"
+    },
+    {
+      // Group pep621 and pre-commit updates into a single PR so the pre-commit
+      // additional_dependencies and pyproject.toml deps land together. The workflow's
+      // weekly `uv lock --upgrade` keys on this slug's branch, renovate/pep621-pre-commit.
+      "matchManagers": [
+        "pep621",
+        "pre-commit"
+      ],
+      "groupName": "pep621 and pre-commit",
+      "groupSlug": "pep621-pre-commit",
+      // Bump the range even if the new version satisfies the existing range.
+      "rangeStrategy": "bump"
+    },
+    {
+      // prek-action installs prek at `latest` unless told otherwise, so its `prek-version`
+      // inputs (qa.yml, update-dependencies.yml) are pinned to uv.lock's prek. The
+      // github-actions manager tracks that input natively (as `prek`, from j178/prek's
+      // v-prefixed GitHub releases), and this rule, placed after the github-actions group,
+      // moves it with the dev group's prek in the same PR.
+      "matchManagers": [
+        "github-actions"
+      ],
+      "matchDepNames": [
+        "prek"
+      ],
+      "groupName": "pep621 and pre-commit",
+      "groupSlug": "pep621-pre-commit"
+    }
+  ]
+}
