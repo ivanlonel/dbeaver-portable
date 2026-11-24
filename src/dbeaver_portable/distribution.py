@@ -77,7 +77,12 @@ def release_version(root: Element) -> str:
     if not number:
         msg = f"{VERSION_URL} has no <number> element"
         raise DistributionError(msg)
-    patches = [int(p.text) for p in root.findall("patches/patch/patch-version") if p.text]
+    texts = [p.text.strip() for p in root.findall("patches/patch/patch-version") if p.text]
+    try:
+        patches = [int(text) for text in texts if text]
+    except ValueError:
+        msg = f"{VERSION_URL} has a non-numeric <patch-version>: {texts}"
+        raise DistributionError(msg) from None
     return f"{number}.{max(patches)}" if patches else number
 
 

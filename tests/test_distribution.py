@@ -42,7 +42,7 @@ def test_category_features_skip_the_ide_integration_and_loose_ranges() -> None:
     ]
 
 
-def _patches(*numbers: int) -> str:
+def _patches(*numbers: int | str) -> str:
     entries = "".join(f"<patch><patch-version>{n}</patch-version></patch>" for n in numbers)
     return f"<patches>{entries}</patches>"
 
@@ -57,10 +57,17 @@ def test_release_version_appends_the_highest_patch(patches: str, expected: str) 
     assert distribution.release_version(root) == expected
 
 
-def test_release_version_requires_a_number() -> None:
-    """Refuse a version.xml without <number>."""
-    with pytest.raises(distribution.DistributionError, match="no <number>"):
-        distribution.release_version(ElementTree.fromstring("<version/>"))
+@pytest.mark.parametrize(
+    ("xml", "match"),
+    [
+        ("<version/>", "no <number>"),
+        (f"<version><number>26.2.5</number>{_patches('2a')}</version>", "non-numeric"),
+    ],
+)
+def test_release_version_rejects_bad_metadata(xml: str, match: str) -> None:
+    """Refuse a version.xml without <number> or with a non-numeric patch."""
+    with pytest.raises(distribution.DistributionError, match=match):
+        distribution.release_version(ElementTree.fromstring(xml))
 
 
 def test_check_matches_rejects_features_of_another_build() -> None:
