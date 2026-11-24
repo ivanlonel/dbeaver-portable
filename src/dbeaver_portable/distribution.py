@@ -66,13 +66,33 @@ class Feature:
         return f"{self.unit_id}/{self.version}"
 
 
-def latest_version() -> str:
-    """Return the version number of the latest DBeaver Community release."""
-    number = ElementTree.fromstring(net.fetch(VERSION_URL)).findtext("number")
+def release_version(root: Element) -> str:
+    """
+    Return the downloadable version that version.xml describes.
+
+    A patch release keeps <number> (26.2.5) and adds <patch-version> entries; its files live
+    under <number>.<highest patch> (26.2.5.2), and the unpatched release may be withdrawn.
+    """
+    number = (root.findtext("number") or "").strip()
     if not number:
         msg = f"{VERSION_URL} has no <number> element"
         raise DistributionError(msg)
-    return number.strip()
+    patches = [int(p.text) for p in root.findall("patches/patch/patch-version") if p.text]
+    return f"{number}.{max(patches)}" if patches else number
+
+
+def latest_version() -> str:
+    """Return the version of the latest DBeaver Community release, checking its files exist."""
+    version = release_version(ElementTree.fromstring(net.fetch(VERSION_URL)))
+    try:
+        net.fetch(checksum_url(version))
+    except FileNotFoundError:
+        msg = (
+            f"{VERSION_URL} announces DBeaver {version}, but {FILES_URL}/{version}/ has no"
+            " Windows zip checksum; DBeaver may have changed how it numbers releases"
+        )
+        raise DistributionError(msg) from None
+    return version
 
 
 def zip_name(version: str) -> str:
@@ -80,10 +100,15 @@ def zip_name(version: str) -> str:
     return f"dbeaver-ce-{version}-windows-x86_64.zip"
 
 
+def checksum_url(version: str) -> str:
+    """Return the URL of the MD5 file DBeaver publishes for a release's Windows zip."""
+    return f"{FILES_URL}/{version}/checksum/{zip_name(version)}.md5"
+
+
 def download_zip(version: str) -> Path:
     """Return the cached zip of a release, downloading it when missing or not matching its MD5."""
     name = zip_name(version)
-    expected = net.fetch(f"{FILES_URL}/{version}/checksum/{name}.md5").decode().split()[0].lower()
+    expected = net.fetch(checksum_url(version)).decode().split()[0].lower()
     path = net.cache_dir() / "dbeaver" / name
     if path.is_file() and net.file_digest(path, "md5") == expected:
         log.info("Using cached %s", name)
