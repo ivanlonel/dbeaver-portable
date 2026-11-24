@@ -33,6 +33,9 @@ hooks run by prek. The README covers usage and the package layout.
 
 Verified on DBeaver 26.2.4. When a new release breaks the build, suspect these first.
 
+- **Release version.** `version.xml`'s `<number>` leaves out patch releases: 26.2.5.2 is
+  `<number>26.2.5</number>` plus `<patch-version>` 1 and 2, its files live under
+  `files/26.2.5.2/`, and the withdrawn 26.2.5 checksum answers 404 (`release_version`).
 - **Bundle pool.** p2 installs extensions under `configuration/org.eclipse.osgi/<id>/data/<hash>/`
   (`plugins/`, `features/`, `artifacts.xml`, `content.xml`), not in the app's `plugins/`, and
   `bundles.info` points there. It looks like OSGi cache but must ship: `scrub.scrub_app` keeps
